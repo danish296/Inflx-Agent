@@ -1,0 +1,31 @@
+{
+  "company": "AutoStream",
+  "tagline": "Automated video editing tools for content creators.",
+  "chunks": [
+    {
+      "id": "plan_basic",
+      "topic": "Basic Plan",
+      "text": "AutoStream Basic Plan: Price $29 per month. Includes 10 videos per month with a maximum resolution of 720p. Best suited for hobbyists and early-stage creators."
+    },
+    {
+      "id": "plan_pro",
+      "topic": "Pro Plan",
+      "text": "AutoStream Pro Plan: Price $79 per month. Includes unlimited videos per month, up to 4K resolution rendering, and AI-generated captions. Includes 24/7 priority support."
+    },
+    {
+      "id": "policy_refunds",
+      "topic": "Refund Policy",
+      "text": "Refunds are available within the first 7 days of purchase. After 7 days, no refunds are issued under any circumstance."
+    },
+    {
+      "id": "policy_support",
+      "topic": "Customer Support",
+      "text": "24/7 customer support is available exclusively to Pro plan subscribers. Basic plan users receive standard business-hours email support."
+    },
+    {
+      "id": "features_overview",
+      "topic": "Product Features",
+      "text": "AutoStream provides automated video editing, AI captions (Pro only), multi-platform export for YouTube, Instagram, TikTok, and LinkedIn, plus scene detection and one-click highlight reels."
+    }
+  ]
+}
