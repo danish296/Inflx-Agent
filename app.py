@@ -242,7 +242,7 @@ html, body, [class*="css"], .stApp,
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ===== Chat input (cover every Streamlit bottom-container variant) ===== */
+/* ===== Chat input — single clean border, no double-ring ===== */
 [data-testid="stBottom"],
 [data-testid="stBottomBlockContainer"],
 [data-testid="stBottom"] > div,
@@ -250,54 +250,68 @@ html, body, [class*="css"], .stApp,
 section[data-testid="stBottom"] {
   background: var(--paper) !important;
   border-top: 1px solid var(--line) !important;
+  box-shadow: none !important;
 }
 
+/* Outer wrapper — NO border (kills the double-border look). */
 [data-testid="stChatInput"],
-[data-testid="stChatInputContainer"],
+[data-testid="stChatInputContainer"] {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* Inner base-input box — this is the ONLY visible bordered element. */
+[data-testid="stChatInput"] div[data-baseweb="base-input"],
 div[data-baseweb="base-input"] {
   background: var(--paper-2) !important;
   border: 1px solid var(--line) !important;
   border-radius: 2px !important;
   box-shadow: none !important;
+  outline: none !important;
   transition: border-color 0.2s ease;
 }
-[data-testid="stChatInput"]:focus-within,
-[data-testid="stChatInputContainer"]:focus-within,
+[data-testid="stChatInput"] div[data-baseweb="base-input"]:focus-within,
 div[data-baseweb="base-input"]:focus-within {
   border-color: var(--amber) !important;
   box-shadow: 0 0 0 1px rgba(214,155,58,0.25) !important;
 }
+
+/* Textarea itself — no border, transparent so the wrapper border is the only line. */
 [data-testid="stChatInput"] textarea,
 [data-testid="stChatInputTextArea"],
 [data-testid="stChatInput"] input,
 div[data-baseweb="base-input"] textarea,
-div[data-baseweb="base-input"] input,
-textarea {
-  background: var(--paper-2) !important;
+div[data-baseweb="base-input"] input {
+  background: transparent !important;
   color: var(--ink) !important;
   caret-color: var(--amber) !important;
   font-family: 'IBM Plex Sans', sans-serif !important;
   font-size: 0.98rem !important;
   border: none !important;
+  outline: none !important;
   box-shadow: none !important;
   -webkit-text-fill-color: var(--ink) !important;
 }
 [data-testid="stChatInput"] textarea::placeholder,
 [data-testid="stChatInputTextArea"]::placeholder,
-textarea::placeholder,
-input::placeholder {
+div[data-baseweb="base-input"] textarea::placeholder,
+div[data-baseweb="base-input"] input::placeholder {
   color: var(--ink-faint) !important;
   opacity: 1 !important;
 }
 
-/* Send button (the little right-side arrow Streamlit renders) */
+/* Send button (the little right-side arrow Streamlit renders). */
 [data-testid="stChatInputSubmitButton"],
 button[data-testid="stChatInputSubmitButton"],
 [data-testid="stChatInput"] button {
   background: transparent !important;
   color: var(--amber) !important;
+  border: none !important;
   border-left: 1px solid var(--line) !important;
   border-radius: 0 !important;
+  box-shadow: none !important;
 }
 [data-testid="stChatInputSubmitButton"] svg,
 [data-testid="stChatInput"] button svg {
@@ -418,6 +432,8 @@ def _init_state() -> None:
         st.session_state.intent = "—"
     if "lead_captured" not in st.session_state:
         st.session_state.lead_captured = False
+    if "pending_user_msg" not in st.session_state:
+        st.session_state.pending_user_msg = None
 
 
 def _reset_session() -> None:
@@ -425,6 +441,7 @@ def _reset_session() -> None:
     st.session_state.ui_messages = []
     st.session_state.intent = "—"
     st.session_state.lead_captured = False
+    st.session_state.pending_user_msg = None
 
 
 _init_state()
@@ -574,34 +591,71 @@ with st.sidebar:
 
 
 # ---------------------------------------------------------------------------
-# Input → agent invocation
+# Input → agent invocation (two-phase render so the user's message
+# appears IMMEDIATELY, before the LLM round-trip)
 # ---------------------------------------------------------------------------
-user_input = st.chat_input("ask about plans, or tell me what you're building…")
 
-if user_input:
-    st.session_state.ui_messages.append({"role": "user", "content": user_input})
+# Phase 2: if there's a pending user message from the previous render, show a
+# typing indicator and call the agent now. The user bubble is already on
+# screen because it was appended and rendered BEFORE we trigger this phase.
+if st.session_state.pending_user_msg:
+    pending = st.session_state.pending_user_msg
+    st.session_state.pending_user_msg = None
+
+    # Inline "typing" bubble so the UI doesn't feel frozen.
+    st.markdown(
+        """
+        <div class="turn assistant">
+          <div class="who">inflx</div>
+          <div class="bubble" style="color:var(--ink-dim);font-style:italic;">
+            <span class="typing-dots"><span></span><span></span><span></span></span>
+          </div>
+        </div>
+        <style>
+          .typing-dots { display:inline-flex; gap:4px; align-items:center; }
+          .typing-dots span {
+            width: 5px; height: 5px; border-radius: 50%;
+            background: var(--amber);
+            animation: typ 1.2s infinite ease-in-out;
+          }
+          .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+          .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+          @keyframes typ {
+            0%, 80%, 100% { opacity: 0.2; transform: translateY(0); }
+            40% { opacity: 1; transform: translateY(-2px); }
+          }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     try:
-        with st.spinner(""):
-            result = chat_with_state(user_input, thread_id=st.session_state.thread_id)
+        result = chat_with_state(pending, thread_id=st.session_state.thread_id)
         st.session_state.intent = result["intent"]
+        prev_captured = st.session_state.lead_captured
         st.session_state.lead_captured = result["lead_captured"]
         st.session_state.ui_messages.append(
             {"role": "assistant", "content": result["reply"]}
         )
-        if result["lead_captured"] and not any(
-            m.get("role") == "system" and "captured" in m["content"]
-            for m in st.session_state.ui_messages
-        ):
+        if result["lead_captured"] and not prev_captured:
             st.session_state.ui_messages.append(
                 {
                     "role": "system",
                     "content": "[tool · mock_lead_capture executed — lead recorded]",
                 }
             )
-    except Exception as exc:  # surface errors in the UI instead of crashing
+    except Exception as exc:
         st.session_state.ui_messages.append(
             {"role": "system", "content": f"[error] {exc}"}
         )
+    st.rerun()
+
+# Phase 1: capture new input, append it to history, and rerun so the user's
+# own bubble paints BEFORE the (potentially slow) LLM call starts.
+user_input = st.chat_input("ask about plans, or tell me what you're building…")
+if user_input:
+    st.session_state.ui_messages.append({"role": "user", "content": user_input})
+    st.session_state.pending_user_msg = user_input
     st.rerun()
 
 
